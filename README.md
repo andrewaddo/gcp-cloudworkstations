@@ -187,4 +187,32 @@ This method routes DNS and traffic dynamically through the VM, bypassing the nee
 ### Troubleshooting
 *   **404 Not Found:** Occurs if you are using an arbitrary local port (like 8443) and the Google Login redirect pushes you back to 443. Use **Method A** or **Method B** to fix.
 *   **401 Permission Denied:** The SSH tunnel works perfectly, but your signed-in Google account lacks the `roles/workstations.workstationAdmin` or `roles/workstations.user` permission.
-*   **ERR_CONNECTION_REFUSED:** Your SSH tunnel dropped. Restart the tunnel command.
+---
+
+## Cleanup
+
+To avoid ongoing costs, you can delete all created resources using the following sequence. 
+
+**Note**: The Workstation Cluster deletion can take upwards of 20 minutes to complete.
+
+```bash
+# 1. Delete Workstations and Configurations
+gcloud workstations delete my-workstation --cluster=private-cluster --config=default-config --region=us-central1 --quiet
+gcloud workstations configs delete default-config --cluster=private-cluster --region=us-central1 --quiet
+
+# 2. Delete the Workstation Cluster
+gcloud workstations clusters delete private-cluster --region=us-central1 --quiet
+
+# 3. Delete Networking and PSC Endpoints
+gcloud compute forwarding-rules delete psc-workstations-endpoint --region=us-central1 --quiet
+gcloud compute addresses delete psc-workstations-ip --region=us-central1 --quiet
+gcloud dns managed-zones delete workstations-private-zone --quiet
+
+# 4. Delete the Verification VM and Firewall Rules
+gcloud compute instances delete verification-vm --zone=us-central1-a --quiet
+gcloud compute firewall-rules delete allow-internal-workstations allow-iap-ssh-workstations --quiet
+
+# 5. Delete the VPC and Subnet
+gcloud compute networks subnets delete workstations-subnet --region=us-central1 --quiet
+gcloud compute networks delete workstations-vpc --quiet
+```
