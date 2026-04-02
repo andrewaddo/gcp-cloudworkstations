@@ -42,8 +42,14 @@ Update your on-premises DNS servers (Active Directory, Bind, etc.) with a condit
 - **DNS Suffix**: `*.cloudworkstations.dev`
 - **Forward to**: `10.0.0.53` (Hub Inbound IP)
 
-### Step 3: Create Spoke DNS Zones
-In each **Spoke Project**, create a Private DNS Zone for its specific cluster and authorize the **Hub VPC** to see it.
+### Step 3: Create Spoke DNS Zones with Cross-Project Visibility
+While the Cloud Workstations cluster and its Private Service Connect (PSC) endpoint live in a **Spoke Project**, the DNS resolution must happen in the **Hub Project** (where the VPN/Interconnect lands). 
+
+To bridge this gap, we use a feature called **Cross-Project DNS Visibility**. By creating the Private DNS Zone in the Spoke project but explicitly "binding" it to the Hub VPC network, any DNS query originating from (or forwarded through) the Hub VPC will securely resolve the Spoke's records.
+
+**Why this is powerful:** 
+* **Decentralized Management**: Application teams manage their own clusters, PSC endpoints, and DNS records within their own Spoke projects.
+* **Centralized Resolution**: The Networking team only maintains one Inbound DNS Policy in the Hub. Corporate DNS has a single target (`10.0.0.53`), without needing to know about the dozens of dynamically generated Workstation domains.
 
 **For Cluster A (in Spoke Project 1):**
 ```bash
@@ -53,7 +59,14 @@ gcloud dns managed-zones create cluster-aaa-zone \
     --visibility=private \
     --networks=https://www.googleapis.com/compute/v1/projects/net-hub-prod/global/networks/hub-vpc \
     --project=spoke-project-1
+```
+**Understanding the `--networks` flag:**
+Notice that the `--networks` flag provides the *fully qualified URI* to the `hub-vpc` located in the `net-hub-prod` project. 
+1. This explicitly **authorizes** the zone to be visible to the Hub VPC.
+2. It does *not* make the zone visible to the local Spoke VPC (unless you add the Spoke VPC to the list as well).
+3. Ensure the account running this command has the `roles/dns.peer` permission on the Hub Project, allowing it to attach a DNS zone to a network it doesn't own.
 
+```bash
 # Add the Wildcard A Record pointing to Cluster A's PSC IP
 gcloud dns record-sets transaction start --zone=cluster-aaa-zone --project=spoke-project-1
 gcloud dns record-sets transaction add 10.1.1.100 \
